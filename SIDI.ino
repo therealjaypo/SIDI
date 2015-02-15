@@ -133,6 +133,20 @@ void update_arpeggios() {
 }
 
 /**
+ * Spin continuously at Serial.read() until it returns something.
+ * Potentially very dangerous.
+ */
+int forceRead() {
+  int ret;
+  
+  do {
+    ret = Serial.read();
+  } while( ret == -1 );
+  
+  return ret;
+}
+
+/**
  * If there's data available on the serial port, read
  * it and act appropriately.
  *
@@ -140,12 +154,10 @@ void update_arpeggios() {
  * arpeggio, do so.
  */
 void loop() {
-  int evt, chan, note, vel;
+  int evt, chan, note, vel, foo;
   
   while( Serial.available() > 0 ) {
-    do {
-      evt = Serial.read();
-    } while( evt == -1 );
+    evt = forceRead();
     
     chan = evt & 0x0f;
     evt &= 0xf0;
@@ -153,13 +165,8 @@ void loop() {
     switch( evt & 0xf0 ) {
       case 0x80:
       case 0x90:
-        do {
-          note = Serial.read();
-        } while( note == -1 );
-        
-        do {
-          vel = Serial.read();
-        } while( vel == -1 );
+        note = forceRead();
+        vel = forceRead();
         
         if( arpeg[chan][0] == 1 ) {
           if( evt == 0x90 && vel != 0 ) {
@@ -202,12 +209,12 @@ void loop() {
         } else if( chan < 3 && sidinote[note] != 0 ) {
           if( evt == 0x80 || vel == 0 ) {
             if( curNote[chan] == note ) {
-            curNote[chan] = 0;
+              curNote[chan] = 0;
               SID.voiceOff(chan);
               curNote[chan] = 0;
             }
           } else {
-            if( curNote[chan] == 0 ) {
+            if( curNote[chan] != note ) {
               SID.setFrequency( chan, sidinote[note] );
               SID.updateVoiceFrequency( chan );
               SID.voiceOn(chan);
@@ -219,39 +226,33 @@ void loop() {
         
       case 0xA0:
       case 0xB0:
-        Serial.read();
-        Serial.read();
+        forceRead();
+        forceRead();
         break;
         
       case 0xC0:
-        Serial.read();
+        forceRead();
         break;
         
       case 0xD0:
-        Serial.read();
+        forceRead();
         break;
         
       case 0xE0:
-        Serial.read();
-        Serial.read();
+        forceRead();
+        forceRead();
         break;
         
       case 0xF0:
-        do {
-          chan = Serial.read();
-        } while( chan == -1 );
+        chan = forceRead();
         
         if( chan == 0x7D ) {
-          do {
-            chan = Serial.read();
-          } while( chan == -1 );
+          chan = forceRead();
           
           switch( chan ) {
             // Stop a or all voices
             case 0:
-              do {
-                 chan = Serial.read();
-              } while( chan == -1 );
+              chan = forceRead();
               
               if( chan == 4 ) {
                 for( chan=0;chan<3;chan++ ) {
@@ -273,52 +274,24 @@ void loop() {
               
             // Update ADSR envelope
             case 1:
-              do {
-                chan = Serial.read();
-              } while( chan == -1 );
+              chan = forceRead();
               
-              int atk;
-              do {
-                atk = Serial.read();
-              } while( atk == -1 );
-              
-              int sus;
-              do {
-                sus = Serial.read();
-              } while( sus == -1);
-              
-              int dec;
-              do { 
-                dec = Serial.read();
-              } while( dec == -1 );
-              
-              int rel;
-              do {
-                rel = Serial.read();
-              } while( rel == -1 );
+              evt = forceRead();
+              note = forceRead();
+              vel = forceRead();
+              foo = forceRead();
 
-              SID.setEnvelope( chan, atk, sus, dec, rel );
+              SID.setEnvelope( chan, evt, note, vel, foo );
               SID.updateEnvelope(chan);
               
               break;
               
             // Update pulse width
             case 2:
-              do {
-                chan = Serial.read();
-              } while( chan == -1 );
-              
-              do {
-                evt = Serial.read();
-              } while( evt == -1 );
-              
-              do {
-                note = Serial.read();
-              } while ( note == -1 );
-              
-              do {
-                vel = Serial.read();
-              } while( vel == -1 );
+              chan = forceRead();
+              evt = forceRead();
+              note = forceRead();
+              vel = forceRead();
               
               SID.setPulseWidth( chan, (evt << 8) | (note << 4) | vel );
               
@@ -326,57 +299,37 @@ void loop() {
              
             // Update shape 
             case 3:
-              do {
-                chan = Serial.read();
-              } while( chan == -1 );
-              
-              do {
-                evt = Serial.read();
-              } while( evt == -1 );
+              chan = forceRead();
+              evt = forceRead();
               
               SID.setShape(chan,evt);
               break;
               
            // Set test
            case 4:
-             chan = Serial.read();
-             Serial.read();
+             chan = forceRead();
+             forceRead();
              break;
              
           // Set sync
           case 5:
-            do {
-              chan = Serial.read();
-            } while( chan == -1 );
-            
-            do {
-              evt = Serial.read();
-            } while( evt == -1 );
+            chan = forceRead();
+            evt = forceRead();
 
             SID.setSync(chan,evt);
             break;
             
           // Update ring
           case 6:
-            do {
-              chan = Serial.read();
-            } while( chan == -1 );
-            
-            do {
-              evt = Serial.read();
-            } while( evt == -1 );
+            chan = forceRead();
+            evt = forceRead();
             
             SID.setRing(chan,evt);
             break;
             
           case 7:
-            do {
-              chan = Serial.read();
-            } while( chan == -1 );
-            
-            do {
-              evt = Serial.read();
-            } while( evt == -1 );
+            chan = forceRead();
+            evt = forceRead();
             
             if( evt ) {
               SID.voiceOn(chan);
@@ -387,9 +340,7 @@ void loop() {
             
           // Volume
           case 8:
-            do {
-              chan = Serial.read();
-            } while( chan == -1 );
+            chan = forceRead();
             SID.setVolume(chan);
             break;
             
@@ -406,16 +357,9 @@ void loop() {
      
       // Arpeggio
       case 9:
-        do {
-          chan = Serial.read();
-        } while( chan == -1 );
+        chan = forceRead();
+        evt = forceRead();
         
-        do {
-          evt = Serial.read();
-        } while( evt == -1 );
-        
-        Serial.println("Arpeggio on");
-        Serial.flush();
         arpeg[chan][0] = evt;
         
         if( evt == 0 ) {
