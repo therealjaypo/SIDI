@@ -89,11 +89,11 @@ void setup() {
  * @param chan The channel to sort
  */
 void sort_arpeggio(int chan) {
-  int tmp, done = 0;
+  int tmp, done = 0,x;
   
   while( done != 1 ) {
     done = 1;
-    for( int x=2;x<5;x++ ) {
+    for( x=2;x<5;x++ ) {
       if( arpeg[chan][x] > arpeg[chan][x+1] ) {
         tmp = arpeg[chan][x+1];
         arpeg[chan][x+1] = arpeg[chan][x];
@@ -109,24 +109,25 @@ void sort_arpeggio(int chan) {
  * whatever channels it's needed.
  */
 void update_arpeggios() {
-  int x,note;
+  int chan,note;
   
-  for( int chan = 0; chan < 3; chan++ ) {
+  for( chan = 0; chan < 3; chan++ ) {
     if( arpeg[chan][0] == 1 && arpeg[chan][1] != -1 ) {
       while( arpeg[chan][ arpeg[chan][1] ] == -1 && arpeg[chan][1] < 6 ) {
         arpeg[chan][1]++;
       }
       
-      note = arpeg[chan][arpeg[chan][1]];
-      if( curNote[chan] != note ) {
-        Serial.println("Update arpeg");
-        SID.setFrequency( chan, sidinote[note] );
-        SID.updateVoiceFrequency( chan );
-        curNote[chan] = note;
+      if( arpeg[chan][1] != 6 ) {
+        note = arpeg[chan][arpeg[chan][1]];
+        if( curNote[chan] != note ) {
+          SID.setFrequency( chan, sidinote[note] );
+          SID.updateVoiceFrequency( chan );
+          curNote[chan] = note;
+        }
       }
       
       arpeg[chan][1]++;
-      if( arpeg[chan][1] == 6 )
+      if( arpeg[chan][1] >= 6 )
         arpeg[chan][1] = 2;
     }
   }
@@ -168,9 +169,9 @@ void loop() {
         note = forceRead();
         vel = forceRead();
         
-        if( arpeg[chan][0] == 1 ) {
+        /*if( arpeg[chan][0] == 1 ) {
           if( evt == 0x90 && vel != 0 ) {
-            for(vel=5;vel>1;vel--) {
+            for(vel=6;vel>1;vel--) {
               if( arpeg[chan][vel] == -1 ) {
                 arpeg[chan][vel] = note;
                 break;
@@ -180,7 +181,7 @@ void loop() {
             if( vel != 1 ) {
               sort_arpeggio(chan);
               
-              if( vel == 5 ) {
+              if( vel == 6 ) {
                 arpeg[chan][1] = 2;
                 curNote[chan] = note;
                 SID.setFrequency(chan,sidinote[note]);
@@ -206,10 +207,9 @@ void loop() {
               }
             }
           }
-        } else if( chan < 3 && sidinote[note] != 0 ) {
+        } else*/ if( chan < 3 && sidinote[note] != 0 ) {
           if( evt == 0x80 || vel == 0 ) {
             if( curNote[chan] == note ) {
-              curNote[chan] = 0;
               SID.voiceOff(chan);
               curNote[chan] = 0;
             }
@@ -217,7 +217,10 @@ void loop() {
             if( curNote[chan] != note ) {
               SID.setFrequency( chan, sidinote[note] );
               SID.updateVoiceFrequency( chan );
-              SID.voiceOn(chan);
+              
+              if( curNote[chan] == 0 )
+                SID.voiceOn(chan);
+                
               curNote[chan] = note;
             }
           }
@@ -276,14 +279,8 @@ void loop() {
             case 1:
               chan = forceRead();
               
-              evt = forceRead();
-              note = forceRead();
-              vel = forceRead();
-              foo = forceRead();
-
-              SID.setEnvelope( chan, evt, note, vel, foo );
+              SID.setEnvelope( chan, forceRead(), forceRead(), forceRead(), forceRead() );
               SID.updateEnvelope(chan);
-              
               break;
               
             // Update pulse width
@@ -301,49 +298,61 @@ void loop() {
             case 3:
               chan = forceRead();
               evt = forceRead();
-              
               SID.setShape(chan,evt);
               break;
               
            // Set test
            case 4:
-             chan = forceRead();
+             forceRead();
              forceRead();
              break;
              
-          // Set sync
-          case 5:
-            chan = forceRead();
-            evt = forceRead();
-
-            SID.setSync(chan,evt);
-            break;
+           // Set sync
+           case 5:
+             chan = forceRead();
+             evt = forceRead();
+             SID.setSync(chan,evt);
+             break;
             
-          // Update ring
-          case 6:
-            chan = forceRead();
-            evt = forceRead();
+           // Update ring
+           case 6:
+             chan = forceRead();
+             evt = forceRead();
+             SID.setRing(chan,evt);
+             break;
             
-            SID.setRing(chan,evt);
-            break;
+           case 7:
+             chan = forceRead();
+             evt = forceRead();
+             
+             if( evt ) {
+               SID.voiceOn(chan);
+             } else {
+               SID.voiceOff(chan);              
+             }
+             break;
             
-          case 7:
-            chan = forceRead();
-            evt = forceRead();
-            
-            if( evt ) {
-              SID.voiceOn(chan);
-            } else {
-              SID.voiceOff(chan);              
-            }
-            break;
-            
-          // Volume
-          case 8:
-            chan = forceRead();
-            SID.setVolume(chan);
-            break;
-            
+           // Volume
+           case 8:
+             chan = forceRead();
+             SID.setVolume(chan);
+             break;
+             
+                 // Arpeggio
+      case 9:
+        chan = forceRead();
+        evt = forceRead();
+        
+        arpeg[chan][0] = evt;
+        arpeg[chan][1] = 2;
+        
+        if( evt == 0 ) {
+          for( int pos=2;pos<6;pos++ ) {
+            arpeg[chan][pos] = -1;
+          }
+        } else
+          curNote[chan] = 0;
+             
           }
           do {
             evt = Serial.read();
@@ -355,20 +364,7 @@ void loop() {
         }
         break;
      
-      // Arpeggio
-      case 9:
-        chan = forceRead();
-        evt = forceRead();
-        
-        arpeg[chan][0] = evt;
-        
-        if( evt == 0 ) {
-          arpeg[chan][1] = 2;
-          for( int pos=2;pos<6;pos++ ) {
-            arpeg[chan][pos] = -1;
-          }
-        } else
-          curNote[chan] = 0;
+
         break;
         
       default:
@@ -377,10 +373,11 @@ void loop() {
   }
   
   // ARPEGGIOS
+  /*
   if( millis() - lastarp > arate ) {
     update_arpeggios();
     lastarp = millis();
   }
-
+  */
 }
 
